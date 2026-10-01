@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NeuralThreads</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="popup.css" />
+</head>
+
+<body>
+    <!-- ============================================================
+       ROOT SHELL
+       Fixed 380×580 popup. All panels are stacked and toggled
+       via JS by adding/removing the `active` class.
+       ============================================================ -->
+    <div class="shell">
+
+        <!-- ── TOP NAV ─────────────────────────────────────────────── -->
+        <header class="topbar">
+            <div class="brand">
+                <svg class="brand-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true">
+                    <!-- Neural node network mark -->
+                    <circle cx="10" cy="4" r="2" fill="var(--accent)" />
+                    <circle cx="4" cy="14" r="2" fill="var(--accent-dim)" />
+                    <circle cx="16" cy="14" r="2" fill="var(--accent-dim)" />
+                    <circle cx="10" cy="10" r="1.5" fill="var(--accent)" />
+                    <line x1="10" y1="6" x2="10" y2="8.5" stroke="var(--accent)" stroke-width="1.2" />
+                    <line x1="10" y1="11.5" x2="5" y2="12.5" stroke="var(--wire)" stroke-width="1.2" />
+                    <line x1="10" y1="11.5" x2="15" y2="12.5" stroke="var(--wire)" stroke-width="1.2" />
+                    <line x1="8.5" y1="9.5" x2="5.5" y2="12.5" stroke="var(--wire)" stroke-width="1" opacity=".5" />
+                    <line x1="11.5" y1="9.5" x2="14.5" y2="12.5" stroke="var(--wire)" stroke-width="1" opacity=".5" />
+                </svg>
+                <span class="brand-name">NeuralThreads</span>
+            </div>
+
+            <!-- Tab switcher: Library | Settings -->
+            <nav class="tab-bar" role="tablist">
+                <button class="tab-btn active" id="tab-library" role="tab" aria-selected="true"
+                    data-tab="library">Library</button>
+                <button class="tab-btn" id="tab-settings" role="tab" aria-selected="false"
+                    data-tab="settings">Settings</button>
+            </nav>
+        </header>
+
+        <!-- ── STATUS PILL ──────────────────────────────────────────── -->
+        <!-- Shown only when content.js sends a status update          -->
+        <div class="status-bar" id="status-bar" hidden>
+            <span class="status-dot" id="status-dot"></span>
+            <span class="status-text" id="status-msg"></span>
+        </div>
+
+        <!-- ================================================================
+         PANEL: LIBRARY
+         Session list. Filter by platform. Each card has Inject button.
+         ================================================================ -->
+        <section class="tab-panel active" id="panel-library" role="tabpanel" aria-labelledby="tab-library">
+
+            <!-- Platform filter chips -->
+            <div class="filter-row" role="group" aria-label="Filter by platform">
+                <button class="filter-pill active" data-platform="all">All</button>
+                <button class="filter-pill" data-platform="chatgpt">
+                    <span class="filter-pill-dot" style="background:#10a37f"></span>ChatGPT
+                </button>
+                <button class="filter-pill" data-platform="claude">
+                    <span class="filter-pill-dot" style="background:#d97706"></span>Claude
+                </button>
+                <button class="filter-pill" data-platform="gemini">
+                    <span class="filter-pill-dot" style="background:#4285f4"></span>Gemini
+                </button>
+            </div>
+
+            <!-- Export button: triggers scraper on active tab -->
+            <div class="export-row">
+                <span class="platform-badge" id="current-platform"></span>
+                <button class="btn-export" id="export-btn" aria-label="Export current conversation">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path d="M8 1v9M4 6l4 4 4-4M2 12h12v2H2z" stroke="currentColor" stroke-width="1.6"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    Export This Conversation
+                </button>
+                <!-- Export spinner, hidden by default -->
+                <span class="export-spinner" id="export-spinner" hidden aria-live="polite" aria-label="Exporting…">
+                    <span class="spinner"></span>
+                </span>
+            </div>
+
+            <!-- Session cards list -->
+            <div class="session-list" id="session-list" role="list">
+                <!-- Injected by popup.js. Empty state shown below. -->
+                <div class="empty-state" id="empty-state">
+                    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true">
+                        <rect x="6" y="8" width="24" height="20" rx="3" stroke="var(--border)" stroke-width="1.5" />
+                        <path d="M11 14h14M11 19h10M11 24h7" stroke="var(--border)" stroke-width="1.5"
+                            stroke-linecap="round" />
+                    </svg>
+                    <p>No sessions yet.</p>
+                    <p class="empty-sub">Open a conversation on ChatGPT, Claude, or Gemini, then tap
+                        <strong>Export</strong>.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================================================================
+         PANEL: SETTINGS
+         API key, storage mode, account, danger zone.
+         ================================================================ -->
+        <section class="tab-panel" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+
+            <!-- ── Gemini API Key ──────────────────────────────────────── -->
+            <div class="settings-group">
+                <h2 class="settings-heading">Gemini API Key</h2>
+                <p class="settings-desc">
+                    Stored only in your browser. Never sent to our servers.
+                </p>
+                <div class="field-row">
+                    <input class="field-input" id="api-key-input" type="password" placeholder="AIza…" autocomplete="off"
+                        spellcheck="false" aria-label="Gemini API key" />
+                    <button class="btn-icon" id="api-key-toggle" aria-label="Show API key" title="Show / hide">
+                        <!-- Eye icon -->
+                        <svg id="icon-eye" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="currentColor"
+                                stroke-width="1.4" />
+                            <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.4" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="field-footer">
+                    <span class="key-status" id="api-key-status"></span>
+                    <button class="btn-text" id="save-api-key">Save key</button>
+                    <button class="btn-text danger" id="clear-api-key">Clear key</button>
+                </div>
+                <p class="field-hint">
+                    Get a free key at
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank"
+                        rel="noopener">aistudio.google.com</a>
+                </p>
+            </div>
+
+            <!-- ── Storage Mode ── -->
+            <div class="settings-group storage-mode-group">
+                <h2 class="settings-heading">Storage Mode</h2>
+                <p class="settings-desc" id="storage-mode-desc">Everything stays on this device. No account required.</p>
+                <div class="storage-toggle-section">
+                    <span class="storage-toggle-label" id="storage-mode-label">Local Only</span>
+                    <label class="storage-toggle">
+                        <input type="checkbox" id="storage-mode-toggle" />
+                        <span class="storage-toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- ── Backend URL (for Account / Cloud Sync) ─────────────── -->
+            <div class="settings-group">
+                <h2 class="settings-heading">Backend URL</h2>
+                <p class="settings-desc">
+                    Where your NeuralThreads backend is deployed. Only used for Account
+                    login/signup and Cloud Sync — Export and Inject never need this.
+                </p>
+                <div class="field-row">
+                    <input class="field-input" id="backend-url-input" type="text"
+                        placeholder="http://localhost:5000" autocomplete="off" spellcheck="false"
+                        aria-label="Backend URL" />
+                </div>
+                <div class="field-footer">
+                    <span class="key-status" id="backend-url-status"></span>
+                    <button class="btn-text" id="save-backend-url">Save URL</button>
+                    <button class="btn-text danger" id="reset-backend-url">Reset to default</button>
+                </div>
+            </div>
+
+            <!-- ── Account ─────────────────────────────────────────────── -->
+            <div class="settings-group" id="account-group">
+
+                <!-- Logged-out state -->
+                <div id="auth-section">
+                    <h2 class="settings-heading">Account</h2>
+                    <p class="settings-desc">Log in or sign up to enable Cloud Sync.</p>
+
+                    <!-- Shared credential inputs: used by BOTH login and signup so
+                         switching forms never hides the fields. -->
+                    <input class="field-input" id="auth-email" type="email" placeholder="you@example.com"
+                        autocomplete="email" aria-label="Email address" />
+                    <input class="field-input" id="auth-password" type="password" placeholder="Password (min 8 chars)"
+                        autocomplete="current-password" aria-label="Password" />
+                    <p class="auth-error" id="auth-error" role="alert" hidden></p>
+
+                    <div id="login-form">
+                        <button class="btn-primary" id="login-btn">Log in</button>
+                        <p class="field-hint">Don't have an account? <button class="btn-text" id="show-signup">Sign up</button></p>
+                    </div>
+
+                    <div id="signup-form" style="display:none">
+                        <button class="btn-primary" id="signup-btn">Create Account</button>
+                        <p class="field-hint">Already have an account? <button class="btn-text" id="show-login">Log in</button></p>
+                    </div>
+                </div>
+
+                <!-- Logged-in state (hidden until JWT present) -->
+                <div id="account-section" style="display:none">
+                    <h2 class="settings-heading">Account</h2>
+                    <div class="account-row">
+                        <div class="account-avatar" id="account-avatar" aria-hidden="true">?</div>
+                        <div class="account-meta">
+                            <span class="account-email" id="account-email"></span>
+                            <span class="account-mode" id="account-mode"></span>
+                        </div>
+                        <button class="btn-text danger" id="logout-btn">Log out</button>
+                    </div>
+                    <p class="sync-status" id="sync-status"></p>
+                </div>
+            </div>
+
+            <!-- ── Danger Zone ─────────────────────────────────────────── -->
+            <div class="settings-group danger-zone">
+                <h2 class="settings-heading danger">Danger Zone</h2>
+                <button class="btn-danger" id="btn-clear-sessions">Clear all local sessions</button>
+            </div>
+
+            <!-- Version stamp -->
+            <p class="version-stamp">NeuralThreads v1.1.0 · <a href="https://github.com/neuralthreads" target="_blank"
+                    rel="noopener">GitHub</a></p>
+        </section>
+
+        <!-- ================================================================
+         PANEL: SUMMARY PREVIEW (injected on top of Library)
+         Shows after export+RAG. User can edit before injecting.
+         ================================================================ -->
+        <section class="tab-panel" id="preview-modal" hidden>
+            <div class="preview-header">
+                <button class="btn-back" id="cancel-preview" aria-label="Back to library">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                    </svg>
+                    Back
+                </button>
+                <span class="preview-title">Summary Preview</span>
+            </div>
+
+            <!-- Session meta / preview text -->
+            <div class="preview-meta" id="preview-text"></div>
+
+            <!-- Editable summary textarea -->
+            <label class="preview-label" for="preview-edit">
+                Review and edit the summary before injecting
+            </label>
+            <textarea class="summary-textarea" id="preview-edit" rows="8" placeholder="Generating summary…"
+                aria-label="Conversation summary" spellcheck="true"></textarea>
+
+            <!-- Compression stats -->
+            <div class="compression-stats" id="compression-stats" hidden>
+                <span id="stat-original"></span>
+                <span class="stat-arrow">→</span>
+                <span id="stat-compressed"></span>
+                <span id="stat-ratio" class="stat-ratio"></span>
+            </div>
+
+            <!-- Inject target picker -->
+            <div class="inject-row">
+                <label class="inject-label" for="inject-target">Inject into</label>
+                <select class="inject-select" id="inject-target" aria-label="Target platform">
+                    <option value="chatgpt">ChatGPT</option>
+                    <option value="claude">Claude</option>
+                    <option value="gemini">Gemini</option>
+                </select>
+                <p class="inject-target-note" id="inject-target-note" hidden></p>
+                <p class="inject-target-note" id="attachment-note" hidden></p>
+                <button class="btn-primary" id="inject-btn" disabled>Inject</button>
+            </div>
+
+            <!-- Inject status -->
+            <p class="inject-status" id="inject-status" hidden role="status"></p>
+        </section>
+
+    </div><!-- /shell -->
+
+    <script src="popup.js"></script>
+</body>
+
+</html>

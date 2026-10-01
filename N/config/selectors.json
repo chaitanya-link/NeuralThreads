@@ -1,0 +1,295 @@
+{
+    "_meta": {
+        "version": "1.0.0",
+        "updated": "2025-01-01",
+        "description": "NeuralThreads remote config — DOM selectors for ChatGPT, Claude, Gemini. Fetched at runtime so DOM breakages can be patched without an extension update. Structure must pass validation before use; falls back to bundled copy on failure.",
+        "schema": "v1",
+        "checksum_fields": [
+            "version",
+            "updated"
+        ]
+    },
+    "platforms": {
+        "chatgpt": {
+            "name": "ChatGPT",
+            "baseUrl": "https://chatgpt.com",
+            "urlPatterns": [
+                "https://chatgpt.com/*",
+                "https://chat.openai.com/*"
+            ],
+            "scrape": {
+                "_comment": "Ordered from most-specific to least-specific; first match wins at runtime.",
+                "conversationContainer": [
+                    "div[class*='react-scroll-to-bottom'] > div > div",
+                    "main div[class*='flex-col'][class*='gap']",
+                    "div#__next main"
+                ],
+                "messageBlock": [
+                    "article[data-testid^='conversation-turn']",
+                    "div[data-testid^='conversation-turn']",
+                    "[class*='group'][class*='w-full']"
+                ],
+                "role": {
+                    "_comment": "Attribute or inner-text of a child node that signals user vs assistant.",
+                    "attribute": "data-message-author-role",
+                    "values": {
+                        "user": "user",
+                        "assistant": "assistant"
+                    },
+                    "fallbackSelectors": [
+                        "[data-message-author-role]",
+                        "img[alt='User']",
+                        "img[alt='ChatGPT']"
+                    ]
+                },
+                "messageContent": [
+                    "div[data-message-id] .markdown",
+                    "div[data-message-id]",
+                    "[class*='prose']",
+                    "[class*='message-content']"
+                ],
+                "codeBlock": "pre code",
+                "conversationTitle": [
+                    "h1[class*='text-token-text-primary']",
+                    "nav [aria-current='page'] span",
+                    "title"
+                ],
+                "conversationId": {
+                    "_comment": "Extracted from URL path segment, not DOM. Pattern applied to window.location.pathname.",
+                    "urlPattern": "/c/([a-f0-9-]{36})"
+                },
+                "timestamp": {
+                    "_comment": "ISO string inside time[datetime] if present, else null.",
+                    "selector": "time[datetime]",
+                    "attribute": "datetime"
+                },
+                "modelLabel": [
+                    "div[data-message-model-slug]",
+                    "button[class*='model'] span",
+                    "span[class*='model-name']"
+                ]
+            },
+            "inject": {
+                "_comment": "Injection = place text in the composer and optionally submit.",
+                "composerContainer": [
+                    "div#prompt-textarea",
+                    "div[contenteditable='true'][class*='ProseMirror']",
+                    "textarea[data-id='root']",
+                    "textarea[placeholder*='Message']"
+                ],
+                "submitButton": [
+                    "button[data-testid='send-button']",
+                    "button[aria-label='Send message']",
+                    "button[aria-label='Send prompt']",
+                    "form button[type='submit']"
+                ],
+                "submitDisabledAttr": "disabled",
+                "fileInputSelector": "input[type='file']",
+                "inputMethod": "innerText",
+                "triggerInputEvent": true,
+                "waitForReadySelector": "div#prompt-textarea, textarea[data-id='root']",
+                "notLoggedInIndicators": [
+                    "a[href*='/auth/login']",
+                    "button[data-testid='login-button']",
+                    "h1[class*='Login']"
+                ]
+            }
+        },
+        "claude": {
+            "name": "Claude",
+            "baseUrl": "https://claude.ai",
+            "urlPatterns": [
+                "https://claude.ai/*"
+            ],
+            "scrape": {
+                "conversationContainer": [
+                    "div[class*='flex-1'][class*='overflow-y']",
+                    "main div[class*='conversation']",
+                    "div[data-testid='conversation-content']"
+                ],
+                "messageBlock": [
+                    "div[data-testid='human-turn']",
+                    "div[data-testid='ai-turn']",
+                    "div[class*='Human']",
+                    "div[class*='Assistant']",
+                    "div[class*='ConversationItem']"
+                ],
+                "role": {
+                    "attribute": "data-testid",
+                    "values": {
+                        "user": "human-turn",
+                        "assistant": "ai-turn"
+                    },
+                    "fallbackSelectors": [
+                        "[data-testid='human-turn']",
+                        "[data-testid='ai-turn']"
+                    ]
+                },
+                "messageContent": [
+                    "div[class*='prose']",
+                    "div[data-testid='message-content']",
+                    "p, ul, ol, pre",
+                    "[class*='whitespace-pre-wrap']"
+                ],
+                "codeBlock": "pre code",
+                "conversationTitle": [
+                    "h2[class*='font-tiempos']",
+                    "span[class*='ConversationTitle']",
+                    "title"
+                ],
+                "conversationId": {
+                    "urlPattern": "/chat/([a-f0-9-]{8,})"
+                },
+                "timestamp": {
+                    "selector": "time[datetime]",
+                    "attribute": "datetime"
+                },
+                "modelLabel": [
+                    "button[class*='model'] span",
+                    "div[class*='model-picker'] span",
+                    "span[class*='model-name']"
+                ]
+            },
+            "inject": {
+                "composerContainer": [
+                    "div[contenteditable='true'][class*='ProseMirror']",
+                    "div[data-testid='chat-input'] [contenteditable]",
+                    "fieldset [contenteditable='true']",
+                    "div[enterkeyhint='enter']"
+                ],
+                "submitButton": [
+                    "button[aria-label='Send Message']",
+                    "button[data-testid='send-button']",
+                    "button[aria-label='Send message']",
+                    "fieldset button[type='button']:last-of-type"
+                ],
+                "submitDisabledAttr": "disabled",
+                "fileInputSelector": "input[type='file']",
+                "inputMethod": "innerText",
+                "triggerInputEvent": true,
+                "waitForReadySelector": "div[contenteditable='true'][class*='ProseMirror']",
+                "notLoggedInIndicators": [
+                    "a[href*='/login']",
+                    "button[data-testid='login']",
+                    "div[class*='LoginPage']"
+                ]
+            }
+        },
+        "gemini": {
+            "name": "Gemini",
+            "baseUrl": "https://gemini.google.com",
+            "urlPatterns": [
+                "https://gemini.google.com/*"
+            ],
+            "scrape": {
+                "conversationContainer": [
+                    "chat-window",
+                    "div[class*='conversation-container']",
+                    "infinite-scroller"
+                ],
+                "messageBlock": [
+                    "user-query",
+                    "model-response",
+                    "div[class*='user-query-container']",
+                    "div[class*='model-response-container']"
+                ],
+                "role": {
+                    "_comment": "Gemini uses custom elements; tag name is the role signal.",
+                    "tagNameMap": {
+                        "user-query": "user",
+                        "model-response": "assistant"
+                    },
+                    "fallbackSelectors": [
+                        "user-query",
+                        "model-response"
+                    ]
+                },
+                "messageContent": [
+                    "message-content div",
+                    "div[class*='markdown']",
+                    "response-container-content",
+                    "div[class*='text-body-large']"
+                ],
+                "codeBlock": "pre code, code-block",
+                "conversationTitle": [
+                    "div[class*='conversation-title']",
+                    "h1[class*='title']",
+                    "title"
+                ],
+                "conversationId": {
+                    "urlPattern": "/app/([a-z0-9]+)"
+                },
+                "timestamp": {
+                    "selector": "time[datetime]",
+                    "attribute": "datetime"
+                },
+                "modelLabel": [
+                    "bard-mode-selector",
+                    "div[class*='model-toggle'] span",
+                    "span[class*='model-name']"
+                ]
+            },
+            "inject": {
+                "composerContainer": [
+                    "div.ql-editor[contenteditable='true']",
+                    "rich-textarea div[contenteditable='true']",
+                    "div[enterkeyhint='enter']",
+                    "textarea[aria-label*='prompt']"
+                ],
+                "submitButton": [
+                    "button[aria-label='Send message']",
+                    "button[data-test-id='send-button']",
+                    "button.send-button",
+                    "button[class*='submit']"
+                ],
+                "submitDisabledAttr": "disabled",
+                "fileInputSelector": "input[type='file']",
+                "inputMethod": "innerHTML",
+                "triggerInputEvent": true,
+                "waitForReadySelector": "div.ql-editor, rich-textarea",
+                "notLoggedInIndicators": [
+                    "a[href*='accounts.google.com']",
+                    "div[class*='sign-in']",
+                    "button[data-action*='signin']"
+                ]
+            }
+        }
+    },
+    "validation": {
+        "_comment": "content.js validates this structure on fetch before swapping in. If any required key is missing, falls back to bundled selectors.json.",
+        "requiredTopLevelKeys": [
+            "_meta",
+            "platforms",
+            "validation"
+        ],
+        "requiredPlatforms": [
+            "chatgpt",
+            "claude",
+            "gemini"
+        ],
+        "requiredPerPlatform": [
+            "scrape",
+            "inject"
+        ],
+        "requiredScrapeKeys": [
+            "conversationContainer",
+            "messageBlock",
+            "role",
+            "messageContent"
+        ],
+        "requiredInjectKeys": [
+            "composerContainer",
+            "submitButton",
+            "inputMethod"
+        ],
+        "schemaVersion": "v1"
+    },
+    "globalDefaults": {
+        "_comment": "Fallback timing and retry values used by all content scripts.",
+        "domReadyTimeoutMs": 10000,
+        "domPollIntervalMs": 300,
+        "injectDelayBetweenChunksMs": 80,
+        "remoteConfigTtlMs": 3600000,
+        "remoteConfigUrl": "https://YOUR_BACKEND_URL/config/selectors.json"
+    }
+}

@@ -1,0 +1,873 @@
+/* ==========================================================================
+   NeuralThreads — inject.css
+   ==========================================================================
+   Styles for UI injected directly into host pages (ChatGPT, Claude, Gemini):
+     - Summary preview modal (mandatory pre-inject review, per architecture
+       rule "ALWAYS show summary before inject, user edits, NEVER auto-inject")
+     - Tab picker (multiple-same-platform-tab edge case)
+     - "Not logged in to target" warning banner
+     - Toast notifications (success / error / info)
+     - Human-speed injection progress indicator
+     - Remote-config / DOM-fallback notice
+
+   ISOLATION STRATEGY
+   ------------------------------------------------------------------------
+   This file is injected into arbitrary, unpredictable host page DOM
+   (ChatGPT/Claude/Gemini all ship their own global CSS resets, utility
+   classes, and sometimes very aggressive `*` selectors). To survive that:
+
+     1. Every rule is scoped under `.nt-root` (the single injected container
+        content.js appends to <body>). We never style bare tags.
+     2. Every selector carries the `nt-` prefix to avoid collisions with
+        host class names.
+     3. `all: initial` + explicit re-declaration on `.nt-root` blocks
+        inherited host page styles (host font-family, line-height, color,
+        box-sizing, etc.) from bleeding in.
+     4. High-specificity + `!important` is used deliberately (normally an
+       anti-pattern) because host pages' own `!important` rules and highly
+       specific selectors (e.g. React/Angular component styles) will
+       otherwise win.
+     5. z-index is set to the max safe 32-bit-friendly value used across the
+        extension (2147483000+) so the overlay always sits above host UI
+        (modals, sticky headers, toasts).
+
+   THEME — matches popup.css design system
+   ------------------------------------------------------------------------
+     Deep space dark background, neural purple (#7C5CFC) primary accent,
+     teal (#00D4AA) secondary accent, 8px spacing grid, animated neural
+     pulse motif, full prefers-reduced-motion support.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   0. Root scope + design tokens
+   -------------------------------------------------------------------------- */
+.nt-root {
+    all: initial !important;
+    /* Re-establish a sane, isolated base after the reset above */
+    display: block !important;
+    box-sizing: border-box !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Inter", Helvetica, Arial, sans-serif !important;
+    font-size: 14px !important;
+    line-height: 1.5 !important;
+    color: #ECEBFF !important;
+    -webkit-font-smoothing: antialiased !important;
+    text-rendering: optimizeLegibility !important;
+
+    /* ---- Design tokens (custom properties, scoped to .nt-root) ---- */
+    --nt-bg-void: #0A0A14;
+    --nt-bg-surface: #12121F;
+    --nt-bg-elevated: #1A1A2E;
+    --nt-bg-hover: #22223A;
+    --nt-border: #2A2A44;
+    --nt-border-soft: #1E1E36;
+
+    --nt-purple: #7C5CFC;
+    --nt-purple-dim: #7C5CFC33;
+    --nt-purple-glow: #7C5CFC66;
+    --nt-teal: #00D4AA;
+    --nt-teal-dim: #00D4AA33;
+
+    --nt-text-primary: #F2F1FF;
+    --nt-text-secondary: #ABAAC7;
+    --nt-text-muted: #6E6D8C;
+
+    --nt-success: #00D4AA;
+    --nt-warning: #FFB454;
+    --nt-error: #FF5C7A;
+    --nt-info: #5CA8FC;
+
+    --nt-radius-sm: 6px;
+    --nt-radius-md: 10px;
+    --nt-radius-lg: 16px;
+    --nt-space-1: 8px;
+    --nt-space-2: 16px;
+    --nt-space-3: 24px;
+    --nt-space-4: 32px;
+
+    --nt-shadow-modal: 0 24px 64px -12px rgba(0, 0, 0, 0.6),
+        0 0 0 1px rgba(124, 92, 252, 0.15);
+    --nt-shadow-toast: 0 8px 24px -4px rgba(0, 0, 0, 0.5);
+    --nt-z-base: 2147483000;
+}
+
+.nt-root * {
+    box-sizing: border-box !important;
+    font-family: inherit !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.nt-root button {
+    font: inherit !important;
+    cursor: pointer !important;
+    border: none !important;
+    background: none !important;
+    color: inherit !important;
+}
+
+.nt-root textarea,
+.nt-root input {
+    font: inherit !important;
+    color: inherit !important;
+}
+
+.nt-hidden {
+    display: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   1. Backdrop
+   -------------------------------------------------------------------------- */
+.nt-backdrop {
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(6, 6, 12, 0.72) !important;
+    backdrop-filter: blur(4px) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
+    z-index: var(--nt-z-base) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    animation: nt-fade-in 0.18s ease-out !important;
+}
+
+@keyframes nt-fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   2. Summary preview modal
+   -------------------------------------------------------------------------- */
+.nt-modal {
+    position: relative !important;
+    width: min(560px, 92vw) !important;
+    max-height: 84vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    background: var(--nt-bg-surface) !important;
+    border: 1px solid var(--nt-border) !important;
+    border-radius: var(--nt-radius-lg) !important;
+    box-shadow: var(--nt-shadow-modal) !important;
+    overflow: hidden !important;
+    animation: nt-modal-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    z-index: calc(var(--nt-z-base) + 1) !important;
+}
+
+@keyframes nt-modal-in {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.nt-modal-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: var(--nt-space-2) !important;
+    padding: var(--nt-space-2) var(--nt-space-3) !important;
+    border-bottom: 1px solid var(--nt-border-soft) !important;
+    background: linear-gradient(180deg, var(--nt-bg-elevated), var(--nt-bg-surface)) !important;
+}
+
+.nt-modal-title-group {
+    display: flex !important;
+    align-items: center !important;
+    gap: var(--nt-space-1) !important;
+}
+
+.nt-logo-dot {
+    width: 10px !important;
+    height: 10px !important;
+    border-radius: 50% !important;
+    background: radial-gradient(circle, var(--nt-purple), var(--nt-purple-glow)) !important;
+    box-shadow: 0 0 10px var(--nt-purple-glow) !important;
+    flex-shrink: 0 !important;
+}
+
+.nt-modal-title {
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    color: var(--nt-text-primary) !important;
+    letter-spacing: -0.01em !important;
+}
+
+.nt-modal-subtitle {
+    font-size: 12px !important;
+    color: var(--nt-text-muted) !important;
+    margin-top: 2px !important;
+}
+
+.nt-close-btn {
+    width: 28px !important;
+    height: 28px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: var(--nt-radius-sm) !important;
+    color: var(--nt-text-secondary) !important;
+    transition: background 0.15s ease, color 0.15s ease !important;
+}
+
+.nt-close-btn:hover {
+    background: var(--nt-bg-hover) !important;
+    color: var(--nt-text-primary) !important;
+}
+
+.nt-modal-body {
+    padding: var(--nt-space-3) !important;
+    overflow-y: auto !important;
+    flex: 1 !important;
+}
+
+/* Platform route indicator: Source → Target */
+.nt-route {
+    display: flex !important;
+    align-items: center !important;
+    gap: var(--nt-space-1) !important;
+    margin-bottom: var(--nt-space-2) !important;
+    padding: var(--nt-space-1) var(--nt-space-2) !important;
+    background: var(--nt-bg-elevated) !important;
+    border: 1px solid var(--nt-border-soft) !important;
+    border-radius: var(--nt-radius-md) !important;
+    font-size: 12px !important;
+}
+
+.nt-platform-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 4px 10px !important;
+    border-radius: 999px !important;
+    background: var(--nt-purple-dim) !important;
+    color: var(--nt-purple) !important;
+    font-weight: 600 !important;
+    font-size: 11px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.03em !important;
+}
+
+.nt-platform-badge.nt-target {
+    background: var(--nt-teal-dim) !important;
+    color: var(--nt-teal) !important;
+}
+
+.nt-route-arrow {
+    color: var(--nt-text-muted) !important;
+    font-size: 14px !important;
+}
+
+/* Summary editable textarea */
+.nt-summary-label {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+    color: var(--nt-text-muted) !important;
+    margin-bottom: 6px !important;
+}
+
+.nt-token-count {
+    font-weight: 500 !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+    color: var(--nt-text-muted) !important;
+}
+
+.nt-summary-textarea {
+    width: 100% !important;
+    min-height: 180px !important;
+    resize: vertical !important;
+    background: var(--nt-bg-void) !important;
+    border: 1px solid var(--nt-border) !important;
+    border-radius: var(--nt-radius-md) !important;
+    padding: var(--nt-space-2) !important;
+    color: var(--nt-text-primary) !important;
+    font-size: 13px !important;
+    line-height: 1.6 !important;
+    font-family: "SF Mono", "Cascadia Code", Consolas, monospace !important;
+    outline: none !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.nt-summary-textarea:focus {
+    border-color: var(--nt-purple) !important;
+    box-shadow: 0 0 0 3px var(--nt-purple-dim) !important;
+}
+
+.nt-summary-textarea::selection {
+    background: var(--nt-purple-dim) !important;
+}
+
+/* Preserve formatting inside preview for code blocks */
+.nt-summary-textarea.nt-has-code {
+    white-space: pre-wrap !important;
+}
+
+.nt-meta-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    margin-top: var(--nt-space-2) !important;
+}
+
+.nt-meta-chip {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    padding: 3px 8px !important;
+    border-radius: 999px !important;
+    background: var(--nt-bg-elevated) !important;
+    border: 1px solid var(--nt-border-soft) !important;
+    font-size: 11px !important;
+    color: var(--nt-text-secondary) !important;
+}
+
+/* --------------------------------------------------------------------------
+   3. Warning / alert banners
+   -------------------------------------------------------------------------- */
+.nt-banner {
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: var(--nt-space-1) !important;
+    padding: 10px var(--nt-space-2) !important;
+    border-radius: var(--nt-radius-md) !important;
+    font-size: 12.5px !important;
+    line-height: 1.5 !important;
+    margin-bottom: var(--nt-space-2) !important;
+    border: 1px solid transparent !important;
+}
+
+.nt-banner-icon {
+    flex-shrink: 0 !important;
+    margin-top: 1px !important;
+}
+
+.nt-banner-warning {
+    background: rgba(255, 180, 84, 0.1) !important;
+    border-color: rgba(255, 180, 84, 0.3) !important;
+    color: #FFC978 !important;
+}
+
+.nt-banner-error {
+    background: rgba(255, 92, 122, 0.1) !important;
+    border-color: rgba(255, 92, 122, 0.3) !important;
+    color: #FF8FA3 !important;
+}
+
+.nt-banner-info {
+    background: rgba(92, 168, 252, 0.1) !important;
+    border-color: rgba(92, 168, 252, 0.3) !important;
+    color: #8FC4FF !important;
+}
+
+/* Not-logged-in-to-target warning specifically */
+.nt-banner-action {
+    margin-left: auto !important;
+    font-weight: 600 !important;
+    text-decoration: underline !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+}
+
+/* --------------------------------------------------------------------------
+   4. Footer / actions
+   -------------------------------------------------------------------------- */
+.nt-modal-footer {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: var(--nt-space-2) !important;
+    padding: var(--nt-space-2) var(--nt-space-3) !important;
+    border-top: 1px solid var(--nt-border-soft) !important;
+    background: var(--nt-bg-elevated) !important;
+}
+
+.nt-btn-group {
+    display: flex !important;
+    gap: 8px !important;
+}
+
+.nt-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    padding: 9px 16px !important;
+    border-radius: var(--nt-radius-sm) !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    transition: transform 0.12s ease, box-shadow 0.15s ease, background 0.15s ease,
+        opacity 0.15s ease !important;
+    white-space: nowrap !important;
+}
+
+.nt-btn:active {
+    transform: scale(0.97) !important;
+}
+
+.nt-btn:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+}
+
+.nt-btn-primary {
+    background: linear-gradient(135deg, var(--nt-purple), #6A4CE0) !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 2px 12px -2px var(--nt-purple-glow) !important;
+}
+
+.nt-btn-primary:hover:not(:disabled) {
+    box-shadow: 0 4px 18px -2px var(--nt-purple-glow) !important;
+}
+
+.nt-btn-secondary {
+    background: var(--nt-bg-hover) !important;
+    color: var(--nt-text-primary) !important;
+    border: 1px solid var(--nt-border) !important;
+}
+
+.nt-btn-secondary:hover:not(:disabled) {
+    background: var(--nt-border) !important;
+}
+
+.nt-btn-ghost {
+    background: transparent !important;
+    color: var(--nt-text-secondary) !important;
+}
+
+.nt-btn-ghost:hover:not(:disabled) {
+    color: var(--nt-text-primary) !important;
+}
+
+.nt-btn-danger {
+    background: rgba(255, 92, 122, 0.12) !important;
+    color: var(--nt-error) !important;
+}
+
+.nt-btn-danger:hover:not(:disabled) {
+    background: rgba(255, 92, 122, 0.2) !important;
+}
+
+/* --------------------------------------------------------------------------
+   5. Tab picker (multiple same-platform tabs edge case)
+   -------------------------------------------------------------------------- */
+.nt-tab-picker-list {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+    max-height: 240px !important;
+    overflow-y: auto !important;
+}
+
+.nt-tab-option {
+    display: flex !important;
+    align-items: center !important;
+    gap: var(--nt-space-1) !important;
+    padding: 10px var(--nt-space-2) !important;
+    border: 1px solid var(--nt-border-soft) !important;
+    border-radius: var(--nt-radius-md) !important;
+    background: var(--nt-bg-void) !important;
+    text-align: left !important;
+    width: 100% !important;
+    transition: border-color 0.15s ease, background 0.15s ease !important;
+}
+
+.nt-tab-option:hover {
+    border-color: var(--nt-purple) !important;
+    background: var(--nt-purple-dim) !important;
+}
+
+.nt-tab-favicon {
+    width: 16px !important;
+    height: 16px !important;
+    border-radius: 3px !important;
+    flex-shrink: 0 !important;
+}
+
+.nt-tab-info {
+    display: flex !important;
+    flex-direction: column !important;
+    min-width: 0 !important;
+    flex: 1 !important;
+}
+
+.nt-tab-title {
+    font-size: 13px !important;
+    color: var(--nt-text-primary) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+.nt-tab-url {
+    font-size: 11px !important;
+    color: var(--nt-text-muted) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+.nt-tab-active-dot {
+    width: 7px !important;
+    height: 7px !important;
+    border-radius: 50% !important;
+    background: var(--nt-teal) !important;
+    box-shadow: 0 0 6px var(--nt-teal) !important;
+    flex-shrink: 0 !important;
+}
+
+/* --------------------------------------------------------------------------
+   6. Injection progress (human-speed typing indicator)
+   -------------------------------------------------------------------------- */
+.nt-inject-progress {
+    display: flex !important;
+    align-items: center !important;
+    gap: var(--nt-space-1) !important;
+    padding: var(--nt-space-1) var(--nt-space-2) !important;
+}
+
+.nt-progress-track {
+    flex: 1 !important;
+    height: 4px !important;
+    border-radius: 999px !important;
+    background: var(--nt-border-soft) !important;
+    overflow: hidden !important;
+    position: relative !important;
+}
+
+.nt-progress-fill {
+    height: 100% !important;
+    border-radius: 999px !important;
+    background: linear-gradient(90deg, var(--nt-purple), var(--nt-teal)) !important;
+    width: 0% !important;
+    transition: width 0.25s ease-out !important;
+}
+
+.nt-progress-label {
+    font-size: 11px !important;
+    color: var(--nt-text-muted) !important;
+    min-width: 34px !important;
+    text-align: right !important;
+    font-variant-numeric: tabular-nums !important;
+}
+
+/* Neural pulse — reused loading/working indicator, matches popup.css motif */
+.nt-pulse {
+    position: relative !important;
+    width: 14px !important;
+    height: 14px !important;
+    flex-shrink: 0 !important;
+}
+
+.nt-pulse::before,
+.nt-pulse::after {
+    content: "" !important;
+    position: absolute !important;
+    inset: 0 !important;
+    border-radius: 50% !important;
+    background: var(--nt-purple) !important;
+}
+
+.nt-pulse::before {
+    opacity: 0.9 !important;
+}
+
+.nt-pulse::after {
+    animation: nt-pulse-ring 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+}
+
+@keyframes nt-pulse-ring {
+    0% {
+        transform: scale(1);
+        opacity: 0.7;
+    }
+
+    100% {
+        transform: scale(2.4);
+        opacity: 0;
+    }
+}
+
+/* Typing dots for "injecting at human speed…" state */
+.nt-typing-dots {
+    display: inline-flex !important;
+    gap: 3px !important;
+    align-items: center !important;
+}
+
+.nt-typing-dots span {
+    width: 5px !important;
+    height: 5px !important;
+    border-radius: 50% !important;
+    background: var(--nt-teal) !important;
+    animation: nt-typing-bounce 1.1s ease-in-out infinite !important;
+}
+
+.nt-typing-dots span:nth-child(2) {
+    animation-delay: 0.15s !important;
+}
+
+.nt-typing-dots span:nth-child(3) {
+    animation-delay: 0.3s !important;
+}
+
+@keyframes nt-typing-bounce {
+
+    0%,
+    60%,
+    100% {
+        transform: translateY(0);
+        opacity: 0.5;
+    }
+
+    30% {
+        transform: translateY(-4px);
+        opacity: 1;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   7. Toast notifications
+   -------------------------------------------------------------------------- */
+.nt-toast-container {
+    position: fixed !important;
+    top: var(--nt-space-3) !important;
+    right: var(--nt-space-3) !important;
+    z-index: calc(var(--nt-z-base) + 10) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    max-width: 340px !important;
+    pointer-events: none !important;
+}
+
+.nt-toast {
+    pointer-events: auto !important;
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+    padding: 12px 14px !important;
+    border-radius: var(--nt-radius-md) !important;
+    background: var(--nt-bg-elevated) !important;
+    border: 1px solid var(--nt-border) !important;
+    box-shadow: var(--nt-shadow-toast) !important;
+    animation: nt-toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+@keyframes nt-toast-in {
+    from {
+        opacity: 0;
+        transform: translateX(24px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.nt-toast.nt-toast-out {
+    animation: nt-toast-out 0.2s ease-in forwards !important;
+}
+
+@keyframes nt-toast-out {
+    to {
+        opacity: 0;
+        transform: translateX(24px);
+    }
+}
+
+.nt-toast-icon {
+    width: 20px !important;
+    height: 20px !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+}
+
+.nt-toast-success .nt-toast-icon {
+    background: rgba(0, 212, 170, 0.15) !important;
+    color: var(--nt-teal) !important;
+}
+
+.nt-toast-error .nt-toast-icon {
+    background: rgba(255, 92, 122, 0.15) !important;
+    color: var(--nt-error) !important;
+}
+
+.nt-toast-info .nt-toast-icon {
+    background: rgba(92, 168, 252, 0.15) !important;
+    color: var(--nt-info) !important;
+}
+
+.nt-toast-body {
+    flex: 1 !important;
+    min-width: 0 !important;
+}
+
+.nt-toast-title {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: var(--nt-text-primary) !important;
+}
+
+.nt-toast-message {
+    font-size: 12px !important;
+    color: var(--nt-text-secondary) !important;
+    margin-top: 2px !important;
+}
+
+.nt-toast-close {
+    width: 18px !important;
+    height: 18px !important;
+    flex-shrink: 0 !important;
+    color: var(--nt-text-muted) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 4px !important;
+}
+
+.nt-toast-close:hover {
+    color: var(--nt-text-primary) !important;
+    background: var(--nt-bg-hover) !important;
+}
+
+/* --------------------------------------------------------------------------
+   8. Remote-config / DOM-fallback notice (quiet, non-blocking corner badge)
+   -------------------------------------------------------------------------- */
+.nt-fallback-badge {
+    position: fixed !important;
+    bottom: var(--nt-space-2) !important;
+    right: var(--nt-space-2) !important;
+    z-index: calc(var(--nt-z-base) + 5) !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 6px 10px !important;
+    border-radius: 999px !important;
+    background: var(--nt-bg-elevated) !important;
+    border: 1px solid var(--nt-border) !important;
+    color: var(--nt-text-muted) !important;
+    font-size: 11px !important;
+    box-shadow: var(--nt-shadow-toast) !important;
+}
+
+.nt-fallback-badge .nt-dot-warning {
+    width: 6px !important;
+    height: 6px !important;
+    border-radius: 50% !important;
+    background: var(--nt-warning) !important;
+}
+
+/* --------------------------------------------------------------------------
+   9. Loading / spinner (queue + retry states, e.g. Gemini rate limit backoff)
+   -------------------------------------------------------------------------- */
+.nt-spinner {
+    width: 16px !important;
+    height: 16px !important;
+    border-radius: 50% !important;
+    border: 2px solid var(--nt-border) !important;
+    border-top-color: var(--nt-purple) !important;
+    animation: nt-spin 0.7s linear infinite !important;
+    flex-shrink: 0 !important;
+}
+
+@keyframes nt-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.nt-retry-note {
+    font-size: 11px !important;
+    color: var(--nt-text-muted) !important;
+    font-variant-numeric: tabular-nums !important;
+}
+
+/* --------------------------------------------------------------------------
+   10. Scrollbar theming (webkit) — scoped to .nt-root only
+   -------------------------------------------------------------------------- */
+.nt-root ::-webkit-scrollbar {
+    width: 8px !important;
+    height: 8px !important;
+}
+
+.nt-root ::-webkit-scrollbar-track {
+    background: transparent !important;
+}
+
+.nt-root ::-webkit-scrollbar-thumb {
+    background: var(--nt-border) !important;
+    border-radius: 999px !important;
+}
+
+.nt-root ::-webkit-scrollbar-thumb:hover {
+    background: var(--nt-purple-dim) !important;
+}
+
+/* --------------------------------------------------------------------------
+   11. Reduced motion — disable all decorative animation
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+    .nt-root * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    .nt-pulse::after {
+        display: none !important;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   12. Small viewport / narrow window support
+   -------------------------------------------------------------------------- */
+@media (max-width: 480px) {
+    .nt-modal {
+        width: 96vw !important;
+        max-height: 90vh !important;
+    }
+
+    .nt-modal-footer {
+        flex-direction: column-reverse !important;
+        align-items: stretch !important;
+    }
+
+    .nt-btn-group {
+        width: 100% !important;
+    }
+
+    .nt-btn {
+        flex: 1 !important;
+    }
+
+    .nt-toast-container {
+        left: var(--nt-space-2) !important;
+        right: var(--nt-space-2) !important;
+        max-width: none !important;
+    }
+}

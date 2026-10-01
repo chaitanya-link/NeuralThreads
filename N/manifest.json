@@ -1,0 +1,118 @@
+{
+    "manifest_version": 3,
+    "name": "NeuralThreads",
+    "version": "1.2.0",
+    "description": "Transfer AI conversations \u2014 including photos and documents \u2014 across ChatGPT, Claude, and Gemini with RAG compression. Your memory layer above all AI platforms.",
+    "icons": {
+        "16": "icons/icon16.png",
+        "32": "icons/icon32.png",
+        "48": "icons/icon48.png",
+        "128": "icons/icon128.png"
+    },
+    "action": {
+        "default_popup": "popup/popup.html",
+        "default_icon": {
+            "16": "icons/icon16.png",
+            "32": "icons/icon32.png",
+            "48": "icons/icon48.png",
+            "128": "icons/icon128.png"
+        },
+        "default_title": "NeuralThreads"
+    },
+    "background": {
+        "service_worker": "background/background.js",
+        "type": "module"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "https://chatgpt.com/*",
+                "https://chat.openai.com/*"
+            ],
+            "js": [
+                "content/attachment-refs.js",
+                "content/content.js",
+                "content/chatgpt.js"
+            ],
+            "css": [
+                "styles/inject.css"
+            ],
+            "run_at": "document_idle"
+        },
+        {
+            "matches": [
+                "https://claude.ai/*"
+            ],
+            "js": [
+                "content/attachment-refs.js",
+                "content/content.js",
+                "content/claude.js"
+            ],
+            "css": [
+                "styles/inject.css"
+            ],
+            "run_at": "document_idle"
+        },
+        {
+            "matches": [
+                "https://gemini.google.com/*"
+            ],
+            "js": [
+                "content/attachment-refs.js",
+                "content/content.js",
+                "content/gemini.js"
+            ],
+            "css": [
+                "styles/inject.css"
+            ],
+            "run_at": "document_idle"
+        }
+    ],
+    "permissions": [
+        "storage",
+        "unlimitedStorage",
+        "activeTab",
+        "scripting",
+        "alarms",
+        "downloads"
+    ],
+    "host_permissions": [
+        "https://chatgpt.com/*",
+        "https://*.chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://*.claude.ai/*",
+        "https://gemini.google.com/*",
+        "https://generativelanguage.googleapis.com/*",
+        "https://*.oaiusercontent.com/*",
+        "https://*.openaiusercontent.com/*",
+        "https://*.openai.com/*",
+        "https://*.blob.core.windows.net/*",
+        "https://*.claudeusercontent.com/*",
+        "https://*.anthropic.com/*",
+        "https://*.googleusercontent.com/*",
+        "https://*.usercontent.google.com/*",
+        "https://*.gstatic.com/*"
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "config/selectors.json",
+                "styles/inject.css",
+                "icons/*"
+            ],
+            "matches": [
+                "https://chatgpt.com/*",
+                "https://chat.openai.com/*",
+                "https://claude.ai/*",
+                "https://gemini.google.com/*"
+            ]
+        }
+    ],
+    "content_security_policy": {
+        "extension_pages": "script-src 'self'; object-src 'self'"
+    },
+    "externally_connectable": {
+        "matches": []
+    }
+}
